@@ -1,0 +1,581 @@
+package Final;
+
+//Program Title: Next Gen Analytics 
+//Author: Luke Gebbink
+//Author: Maggie Hedrick
+//Author: Larry Russeau
+//Desc: This Java Application, provides a way for NW admins and cyber-security workers,
+//		to calculate Network downtime with industry terminology, with a MySQL Backend.
+
+import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+
+import java.text.DecimalFormat;
+import java.text.NumberFormat;
+import java.util.ArrayList;
+import java.util.Properties;
+
+import javax.swing.*;
+import javax.swing.text.NumberFormatter;
+
+import org.jfree.chart.ChartFactory;
+import org.jfree.chart.ChartPanel;
+import org.jfree.chart.JFreeChart;
+import org.jfree.data.time.Second;
+import org.jfree.data.time.TimeSeries;
+import org.jfree.data.time.TimeSeriesCollection;
+
+//This line was added to ease debugging across operating systems and IDE's
+
+public class JDBC1 extends JFrame {
+
+	/*
+	 * Based on the result of the JOptionPane above, the UI and Theme colors will be
+	 * initialized Based on the users choice. This reduces the memory needed for 8
+	 * Color values, by making only 4.
+	 */
+
+// Dimension screenSize = mew Dimension(Toolkit.getDefaultToolkit().getScreenSize());
+// frame.setLocation(new Point((int)(screenSize.width/2.0), (int)(screenSize.height/2/0)));
+
+	private JPanel contentPane;
+	private JFormattedTextField txtField1;
+	private JFormattedTextField txtField2;
+	private JFormattedTextField txtOutput;
+	private JTextArea txtArea;
+	private TimeSeriesCollection dataset = new TimeSeriesCollection();
+	private JFreeChart chart = ChartFactory.createTimeSeriesChart("Historical Values", "Date", "Value", dataset);
+	private TimeSeries series = new TimeSeries("Data");
+
+	static Color uiTextColor;
+	static Color backgroundColor;
+	static Color boxColor;
+	static Color textColor;
+
+	public String[] modes = { "Mean Time to Recovery", "Mean Time to Respond", "Mean Time to Repair",
+			"Mean Time to Restore", "Mean Time to Acknowledge ", "Mean Time Between Failure" };
+
+	JPanel chartPanel;
+
+	/**
+	 * Launch the application.
+	 */
+	public static void main(String[] args) {
+
+		JDBC1 frame = new JDBC1();
+		frame.setSize(600, 550);
+		frame.setLocation(430, 100);
+		frame.setVisible(true);
+		//frame.setBackground();
+	
+	}
+
+	public JDBC1() {
+
+		int theme = JOptionPane.showConfirmDialog(null,
+				"Would you like to enable dark mode?\nWe recommend it, as it is easier on your eyes.",
+				"Theme Selection...", JOptionPane.YES_NO_OPTION);
+
+		/*
+		 * Based on the result of the JOptionPane above, the UI and Theme colors will be
+		 * initialized Based on the users choice. This reduces the memory needed for 8
+		 * Color values, by making only 4.
+		 */
+
+		if (theme == JOptionPane.YES_OPTION) {
+			uiTextColor = new Color(114, 137, 218);
+			backgroundColor = new Color(35, 39, 42);
+			boxColor = new Color(64, 68, 75);
+			textColor = new Color(255, 255, 255);
+			//frame.setBackground(new Color(35, 39, 42));
+		}
+
+		else {
+			uiTextColor = new Color(0, 0, 202);
+			backgroundColor = new Color(255, 255, 255);
+			boxColor = new Color(242, 250, 255);
+			textColor = new Color(0, 0, 0);
+			//frame.setBackground(new Color(225, 225, 225));
+		}
+
+		dataset.addSeries(series);
+
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setSize(500, 500);
+		setLocation(430, 100);
+		contentPane = new JPanel();
+		contentPane.setBackground(backgroundColor);
+		contentPane.setLayout(new BoxLayout(contentPane, BoxLayout.PAGE_AXIS));
+		setContentPane(contentPane);
+
+		NumberFormat format = NumberFormat.getInstance();
+		NumberFormatter formatter = new NumberFormatter(format);
+		formatter.setValueClass(Integer.class);
+		formatter.setMinimum(0);
+		formatter.setMaximum(Integer.MAX_VALUE);
+		formatter.setAllowsInvalid(false);
+
+		JPanel panel = new JPanel(new GridLayout(1, 1));
+		panel.setBackground(backgroundColor);
+		panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+		contentPane.add(panel);
+
+		JLabel lblNewLabel_1 = new JLabel("Incident Response Calculator");
+		lblNewLabel_1.setForeground(uiTextColor);
+		lblNewLabel_1.setFont(new Font("Lucida Grande", Font.PLAIN, 24));
+		lblNewLabel_1.setAlignmentX(Component.RIGHT_ALIGNMENT);
+		panel.add(lblNewLabel_1, BorderLayout.WEST);
+
+		JComboBox comboBox = new JComboBox();
+		comboBox.setFont(new Font("Lucida Grande", Font.PLAIN, 14));
+		comboBox.setBackground(boxColor);
+		comboBox.setForeground(textColor);
+		comboBox.setModel(new DefaultComboBoxModel(modes));
+		comboBox.setMaximumSize(comboBox.getPreferredSize());
+		comboBox.setAlignmentX(Component.RIGHT_ALIGNMENT);
+		panel.add(comboBox);
+
+		txtArea = new JTextArea(1, 0);
+		txtArea.setBackground(boxColor);
+		txtArea.setForeground(textColor);
+		txtArea.setLineWrap(true);
+		txtArea.setText(" ");
+		txtArea.setEditable(false);
+		txtArea.setAlignmentX(Component.LEFT_ALIGNMENT);
+		JPanel text = new JPanel(new GridLayout(0, 1));
+		text.setBackground(backgroundColor);
+		text.add(txtArea);
+		text.setAlignmentX(Component.RIGHT_ALIGNMENT);
+		panel.add(text);
+
+		JLabel lblNewLabel = new JLabel("Field 1: ");
+		lblNewLabel.setForeground(textColor);
+		lblNewLabel.setFont(new Font("Lucida Grande", Font.PLAIN, 16));
+		txtField1 = new JFormattedTextField(formatter);
+		txtField1.setBackground(boxColor);
+		txtField1.setForeground(textColor);
+		txtField1.setColumns(10);
+		JLabel down1 = new JLabel("Down Time");
+		down1.setForeground(uiTextColor);
+		down1.setFont(new Font("Lucida Grande", Font.PLAIN, 15));
+		JPanel fieldText = new JPanel();
+		fieldText.add(lblNewLabel);
+		fieldText.add(txtField1);
+		fieldText.add(down1);
+		fieldText.setBackground(backgroundColor);
+		fieldText.setForeground(textColor);
+
+		JPanel insertion = new JPanel(new GridLayout(1, 2));
+		insertion.add(fieldText);
+		insertion.setBackground(backgroundColor);
+		panel.add(insertion, BorderLayout.EAST);
+
+		JLabel lblField = new JLabel("Field 2:");
+		lblField.setForeground(textColor);
+		lblField.setFont(new Font("Lucida Grande", Font.PLAIN, 16));
+
+		txtField2 = new JFormattedTextField(formatter);
+		txtField2.setBackground(boxColor);
+		txtField2.setForeground(textColor);
+		txtField2.setColumns(10);
+
+		JLabel lblDownTime = new JLabel("Incidents");
+		lblDownTime.setForeground(uiTextColor);
+		lblDownTime.setFont(new Font("Lucida Grande", Font.PLAIN, 15));
+		down1.setForeground(uiTextColor);
+		down1.setFont(new Font("Lucida Grande", Font.PLAIN, 15));
+
+		JPanel fieldText2 = new JPanel();
+		fieldText2.setBackground(backgroundColor);
+		fieldText2.add(lblField);
+		fieldText2.add(txtField2);
+		fieldText2.add(lblDownTime);
+
+		insertion.add(fieldText2);
+		insertion.setBackground(textColor);
+
+		JButton btnNewButton = new JButton("Calculate");
+		btnNewButton.setFont(new Font("Lucida Grande", Font.PLAIN, 15));
+		btnNewButton.setAlignmentX(Component.LEFT_ALIGNMENT);
+		panel.add(btnNewButton);
+
+		JLabel lblOutput_1 = new JLabel("Output: ");
+		lblOutput_1.setForeground(textColor);
+		lblOutput_1.setFont(new Font("Lucida Grande", Font.PLAIN, 16));
+		panel.add(lblOutput_1);
+
+		JPanel output = new JPanel(new GridLayout(1, 3));
+		output.add((txtOutput = new JFormattedTextField()));
+		output.setBackground(boxColor);
+		output.setForeground(textColor);
+		txtOutput.setBackground(boxColor);
+		txtOutput.setForeground(textColor);
+		txtOutput.setEditable(false);
+		txtOutput.setColumns(10);
+
+		JLabel supTest = new JLabel("Mins");
+		supTest.setForeground(uiTextColor);
+		supTest.setFont(new Font("Lucida Grande", Font.PLAIN, 15));
+
+		JPanel fieldText1 = new JPanel();
+		fieldText1.add(lblOutput_1);
+		fieldText1.add(output);
+		fieldText1.add(supTest);
+		fieldText1.setBackground(backgroundColor);
+
+		JPanel insertion3 = new JPanel(new GridLayout(0, 3));
+		insertion3.add(fieldText1, BorderLayout.EAST);
+		insertion3.setBackground(backgroundColor);
+		insertion3.setForeground(textColor);
+		panel.add(insertion3);
+		
+		btnNewButton.addActionListener(new ActionListener() {
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				double output = 0;
+
+				switch (comboBox.getSelectedIndex()) {
+				case 0:
+					output = MeanTimeToRecovery();
+					break;
+				case 1:
+					output = MeanTimeToRepair();
+					break;
+				case 2:
+					output = MeanTimeToResolve();
+					break;
+				case 3:
+					output = MeanTimeToRespond();
+					break;
+				case 4:
+					output = MeanTimeBetweenFailures();
+					break;
+				case 5:
+					output = MeanTimeToAcknowledge();
+					break;
+				}
+				txtOutput.setToolTipText(Double.toString(output));
+
+				DecimalFormat df = new DecimalFormat("#.##");
+				output = Double.valueOf(df.format(output));
+
+				int idx = comboBox.getSelectedIndex();
+
+				if (idx < 0)
+					return;
+
+				String type = modes[idx];
+
+				inputData(type, output);
+
+				ArrayList<Object[]> chartData = getData(type);
+
+				DrawChart(chartData);
+
+				txtOutput.setText(Double.toString(output));
+			}
+		});
+
+		comboBox.addActionListener(new ActionListener() {
+
+			@Override
+			public void actionPerformed(ActionEvent e) {
+				String output = "";
+				switch (comboBox.getSelectedIndex()) {
+				case 0:
+					output = "MTTR: is the average time it takes to recover from a product or system failure.\nThis includes the time it fails to the time that it becomes fully operational again.";
+					break;
+				case 1:
+					output = "MTTR: is the average time it takes to repair a system (usually technical or mechanical).\nIt includes both the repair time and any testing time.";
+					break;
+				case 2:
+					output = "MTTR: is the average time it takes to fully resolve a failure.\nThis includes not only the time spent detecting the failure, diagnosing the problem, etc. but also ensuring the failure won't happen again.";
+					break;
+				case 3:
+					output = "MTTR: is the average time it takes to recover from a product or system failure from the time when you are first alerted to that failure.";
+					break;
+				case 4:
+					output = "MTBF: is the predicted elapsed time between inherent failures\nof a mechanical or electronic system, during normal system operation.";
+					break;
+				case 5:
+					output = "MMTA: is the average time it takes from when an alert is triggered to when work begins on the issue.\nThis metric is useful for tracking your team's responsiveness and your alert system's effectiveness.";
+					break;
+				default:
+					output = "Make a selection.";
+					break;
+				}
+
+				txtArea.setText(output);
+
+				int idx = comboBox.getSelectedIndex();
+				if (idx > -1) {
+					String type = modes[idx];
+					ArrayList<Object[]> chartData = getData(type);
+
+					DrawChart(chartData);
+				}
+
+			}
+
+		});
+		comboBox.setSelectedIndex(-1);
+
+		chartPanel = new ChartPanel(chart);
+		chartPanel.setPreferredSize(new Dimension(300, 230));
+		panel.add(chartPanel, BorderLayout.SOUTH);
+		contentPane.add(panel, BorderLayout.CENTER);
+	}
+
+	public void DrawChart(ArrayList<Object[]> chartData) {
+		dataset.getSeries(0).clear();
+		for (Object[] o : chartData) {
+			java.util.Date d = (java.util.Date) o[3];
+			double val = (double) o[2];
+			Second time = new Second(d);
+			dataset.getSeries(0).addOrUpdate(time, val);
+			System.out.println("time: " + time + " value: " + val);
+		}
+		double lowestLow = dataset.getSeries(0).getMinY();
+		double highestHigh = dataset.getSeries(0).getMaxY();
+
+		chart.getXYPlot().getRangeAxis().setRange(lowestLow * 0.95, highestHigh * 1.05);
+	}
+
+	/** The name of the MySQL account to use (or empty for anonymous) */
+	private final String userName = "root";
+
+	/** The password for the MySQL account (or empty for anonymous) */
+	private final String password = "Password01";
+
+	/** The name of the computer running MySQL */
+	private final String serverName = "localhost";
+
+	/** The port of the MySQL server (default is 3306) */
+	private final int portNumber = 3306;
+
+	/**
+	 * The name of the database we are testing with (this default is installed with
+	 * MySQL)
+	 */
+	private final String dbName = "test";
+
+	/** The name of the table we are testing with */
+	private final String tableName = "BusinessImpactAnalysis";
+
+	/**
+	 * Get a new database connection
+	 * 
+	 * @return
+	 * @throws SQLException
+	 */
+	public Connection getConnection() throws SQLException {
+		Connection conn = null;
+		Properties connectionProps = new Properties();
+		connectionProps.put("user", this.userName);
+		connectionProps.put("password", this.password);
+
+		try {
+			Class.forName("com.mysql.jdbc.Driver");
+		} catch (ClassNotFoundException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		conn = DriverManager.getConnection("jdbc:mysql://" + this.serverName + ":" + this.portNumber + "/" + this.dbName
+				+ "?useLegacyDatetimeCode=false&serverTimezone=UTC", connectionProps);
+
+		return conn;
+	}
+
+	/**
+	 * Run a SQL command which does not return a recordset:
+	 * CREATE/INSERT/UPDATE/DELETE/DROP/etc.
+	 * 
+	 * @throws SQLException If something goes wrong
+	 */
+	public ArrayList<Object[]> executeSelect(Connection conn, String command) throws SQLException {
+		Statement stmt = null;
+		ArrayList<Object[]> results = new ArrayList<Object[]>();
+		try {
+			stmt = conn.createStatement();
+			ResultSet queryResult = stmt.executeQuery(command);
+			while (queryResult.next()) {
+				Object[] rowData = new Object[queryResult.getMetaData().getColumnCount()];
+				for (int i = 0; i < queryResult.getMetaData().getColumnCount(); i++) {
+					rowData[i] = queryResult.getObject(i + 1);
+				}
+				results.add(rowData);
+			}
+			;
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return null;
+		} finally {
+
+			// This will run whether we throw an exception or not
+			if (stmt != null) {
+				stmt.close();
+			}
+		}
+		return results;
+	}
+
+	public boolean executeUpdate(Connection conn, String command) throws SQLException {
+		Statement stmt = null;
+		try {
+			stmt = conn.createStatement();
+			stmt.executeUpdate(command); // This will throw a SQLException if it fails
+			return true;
+		} catch (SQLException e) {
+			e.printStackTrace();
+			return false;
+		} finally {
+
+			// This will run whether we throw an exception or not
+			if (stmt != null) {
+				stmt.close();
+			}
+		}
+	}
+
+	public boolean inputData(String type, Double value) {
+		Connection conn = null;
+
+		boolean result = false;
+		try {
+			conn = this.getConnection();
+			System.out.println("Connected to database");
+		} catch (SQLException e) {
+			System.out.println("ERROR: Could not connect to the database");
+			e.printStackTrace();
+			return false;
+		}
+
+		java.util.Date dt = new java.util.Date();
+		java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+		String currentTime = sdf.format(dt);
+
+		String sqlCmd = "INSERT INTO " + this.tableName + " (Type, Value, Date) values (\"" + type + "\", " + value
+				+ ", '" + currentTime + "');";
+		try {
+			result = this.executeUpdate(conn, sqlCmd);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+		return result;
+	}
+
+	public ArrayList<Object[]> getData(String type) {
+		Connection conn = null;
+
+		try {
+			conn = this.getConnection();
+			System.out.println("Connected to database");
+		} catch (SQLException e) {
+			System.out.println("ERROR: Could not connect to the database");
+			e.printStackTrace();
+			return null;
+		}
+
+		String sqlCmd = "SELECT * FROM " + this.tableName + " WHERE Type = '" + type + "';";
+
+		ArrayList<Object[]> result = null;
+		try {
+			result = executeSelect(conn, sqlCmd);
+		} catch (SQLException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		return result;
+
+	}
+
+	public double MeanTimeToRecovery() {
+
+		/// other stuffs
+		String txtField1Val = txtField1.getText().replace(",", "");
+		String txtField2Val = txtField2.getText().replace(",", "");
+
+		if (txtField1Val.length() < 1 || txtField2Val.length() < 1)
+			return 0;
+
+		double field1 = Double.parseDouble(txtField1Val);
+		double field2 = Double.parseDouble(txtField2Val);
+		double output = field1 / field2;
+		return output;
+	}
+
+	public double MeanTimeToRepair() {
+		String txtField1Val = txtField1.getText().replace(",", "");
+		String txtField2Val = txtField2.getText().replace(",", "");
+
+		if (txtField1Val.length() < 1 || txtField2Val.length() < 1)
+			return 0;
+
+		double field1 = Double.parseDouble(txtField1Val);
+		double field2 = Double.parseDouble(txtField2Val);
+		double output = field1 / field2;
+		return output;
+	}
+
+	public double MeanTimeToResolve() {
+		String txtField1Val = txtField1.getText().replace(",", "");
+		String txtField2Val = txtField2.getText().replace(",", "");
+
+		if (txtField1Val.length() < 1 || txtField2Val.length() < 1)
+			return 0;
+
+		double field1 = Double.parseDouble(txtField1Val);
+		double field2 = Double.parseDouble(txtField2Val);
+		double output = field1 + field2;
+		return output;
+	}
+
+	public double MeanTimeToRespond() {
+		String txtField1Val = txtField1.getText().replace(",", "");
+		String txtField2Val = txtField2.getText().replace(",", "");
+
+		if (txtField1Val.length() < 1 || txtField2Val.length() < 1)
+			return 0;
+
+		double field1 = Double.parseDouble(txtField1Val);
+		double field2 = Double.parseDouble(txtField2Val);
+		double output = field1 / field2;
+		return output;
+	}
+
+	public double MeanTimeBetweenFailures() {
+		String txtField1Val = txtField1.getText().replace(",", "");
+		String txtField2Val = txtField2.getText().replace(",", "");
+
+		if (txtField1Val.length() < 1 || txtField2Val.length() < 1)
+			return 0;
+
+		double field1 = Double.parseDouble(txtField1Val);
+		double field2 = Double.parseDouble(txtField2Val);
+		double output = field1 / field2;
+		return output;
+	}
+
+	public double MeanTimeToAcknowledge() {
+		String txtField1Val = txtField1.getText().replace(",", "");
+		String txtField2Val = txtField2.getText().replace(",", "");
+
+		if (txtField1Val.length() < 1 || txtField2Val.length() < 1)
+			return 0;
+
+		double field1 = Double.parseDouble(txtField1Val);
+		double field2 = Double.parseDouble(txtField2Val);
+		double output = field1 / field2;
+		return output;
+	}
+
+}
